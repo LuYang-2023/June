@@ -1,6 +1,10 @@
 import argparse
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.cuda.amp import autocast, GradScaler
 from net import Net
 from dataset import *
 import matplotlib.pyplot as plt
@@ -8,8 +12,10 @@ from metrics import *
 import os
 import time
 from tqdm import tqdm
+from torchvision import transforms
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+
 parser = argparse.ArgumentParser(description="PyTorch BasicIRSTD Inference without mask")
 parser.add_argument("--model_names", default=['ACM', 'ALCNet','DNANet', 'ISNet', 'RDIAN', 'ISTDU-Net'], nargs='+',  
                     help="model_name: 'ACM', 'ALCNet', 'DNANet', 'ISNet', 'UIUNet', 'RDIAN', 'ISTDU-Net', 'U-Net', 'RISTDnet'")
@@ -31,15 +37,16 @@ parser.add_argument("--threshold", type=float, default=0.5)
 
 global opt
 opt = parser.parse_args()
+
 ## Set img_norm_cfg
-if opt.img_norm_cfg_mean != None and opt.img_norm_cfg_std != None:
-  opt.img_norm_cfg = dict()
-  opt.img_norm_cfg['mean'] = opt.img_norm_cfg_mean
-  opt.img_norm_cfg['std'] = opt.img_norm_cfg_std
-  
+if opt.img_norm_cfg_mean is not None and opt.img_norm_cfg_std is not None:
+    opt.img_norm_cfg = dict()
+    opt.img_norm_cfg['mean'] = opt.img_norm_cfg_mean
+    opt.img_norm_cfg['std'] = opt.img_norm_cfg_std
+
 def test(): 
     test_set = InferenceSetLoader(opt.dataset_dir, opt.train_dataset_name, opt.test_dataset_name, opt.img_norm_cfg)
-    test_loader = DataLoader(dataset=test_set, num_workers=1, batch_size=1, shuffle=False)
+    test_loader = DataLoader(dataset=test_set, num_workers=1, batch_size=1, shuffle=False, pin_memory=True)
     
     net = Net(model_name=opt.model_name, mode='test').cuda()
     try:
@@ -49,23 +56,29 @@ def test():
         net.load_state_dict(torch.load(opt.pth_dir, map_location=device)['state_dict'])
     net.eval()
 
+    scaler = GradScaler()
+
     with torch.no_grad():
         for idx_iter, (img, size, img_dir) in tqdm(enumerate(test_loader)):
             img = Variable(img).cuda()
-            pred = net.forward(img)
-            pred = pred[:,:,:size[0],:size[1]]        
+            with autocast():
+                pred = net.forward(img)
+                pred = pred[:,:,:size[0],:size[1]]        
             ### save img
             if opt.save_img == True:
                 img_save = transforms.ToPILImage()(((pred[0,0,:,:]>opt.threshold).float()).cpu())
-                if not os.path.exists(opt.save_img_dir + opt.test_dataset_name + '/' + opt.model_name):
-                    os.makedirs(opt.save_img_dir + opt.test_dataset_name + '/' + opt.model_name)
-                img_save.save(opt.save_img_dir + opt.test_dataset_name + '/' + opt.model_name + '/' + img_dir[0] + '.png')  
-    
+                save_path = os.path.join(opt.save_img_dir, opt.test_dataset_name, opt.model_name)
+                if not os.path.exists(save_path):
+                    os.makedirs(save_path)
+                img_save.save(os.path.join(save_path, img_dir[0] + '.png'))
+            del img, pred  # 释放显存
+            torch.cuda.empty_cache()
+
     print('Inference Done!')
    
 if __name__ == '__main__':
-    opt.f = open(opt.save_log + 'test_' + (time.ctime()).replace(' ', '_').replace(':', '_') + '.txt', 'w')
-    if opt.pth_dirs == None:
+    opt.f = open(os.path.join(opt.save_log, 'test_' + time.strftime("%Y_%m_%d_%H_%M_%S") + '.txt'), 'w')
+    if opt.pth_dirs is None:
         for i in range(len(opt.model_names)):
             opt.model_name = opt.model_names[i]
             print(opt.model_name)
@@ -76,7 +89,7 @@ if __name__ == '__main__':
                 opt.test_dataset_name = opt.dataset_name
                 print(dataset_name)
                 opt.f.write(opt.dataset_name + '\n')
-                opt.pth_dir = opt.save_log + opt.dataset_name + '/' + opt.model_name + '_400.pth.tar'
+                opt.pth_dir = os.path.join(opt.save_log, opt.dataset_name, opt.model_name + '_400.pth.tar')
                 test()
             print('\n')
             opt.f.write('\n')
@@ -93,9 +106,8 @@ if __name__ == '__main__':
                         opt.f.write(pth_dir)
                         print(opt.test_dataset_name)
                         opt.f.write(opt.test_dataset_name + '\n')
-                        opt.pth_dir = opt.save_log + pth_dir
+                        opt.pth_dir = os.path.join(opt.save_log, pth_dir)
                         test()
                         print('\n')
                         opt.f.write('\n')
         opt.f.close()
-        
