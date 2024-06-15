@@ -36,8 +36,8 @@ parser.add_argument("--save", default='./log', type=str, help="Save path of chec
 parser.add_argument("--resume", default=None, nargs='+', help="Resume from exisiting checkpoints (default: None)")
 parser.add_argument("--pretrained", default=None, nargs='+', help="Load pretrained checkpoints (default: None)")
 parser.add_argument("--nEpochs", type=int, default=1000, help="Number of epochs")
-parser.add_argument("--optimizer_name", default='Adam', type=str, help="optimizer name: Adam, Adagrad, SGD")
-parser.add_argument("--optimizer_settings", default={'lr': 0.001}, type=dict, help="optimizer settings")
+parser.add_argument("--optimizer_name", default='SGD', type=str, help="optimizer name: Adam, Adagrad, SGD")
+parser.add_argument("--optimizer_settings", default={'lr': 5e-4}, type=dict, help="optimizer settings")
 parser.add_argument("--scheduler_name", default='CosineAnnealingLR', type=str, help="scheduler name: MultiStepLR")
 parser.add_argument("--scheduler_settings", default={'eta_min': 1e-5, 'last_epoch': -1}, type=dict,
                     help="scheduler settings")
@@ -93,11 +93,11 @@ def train():
                 ckpt = torch.load(resume_pth)
                 net.load_state_dict(ckpt['state_dict'])
 
-    ### Default settings of SCTransNet
-    if opt.optimizer_name == 'Adam':
-        opt.optimizer_settings = {'lr': 0.001}
-        opt.scheduler_name = 'CosineAnnealingLR'
-        opt.scheduler_settings = {'epochs': 1000, 'eta_min': 1e-5, 'last_epoch': -1}
+    # ### Default settings of SCTransNet
+    # if opt.optimizer_name == 'Adam':
+    #     opt.optimizer_settings = {'lr': 5e-4}
+    #     opt.scheduler_name = 'CosineAnnealingLR'
+    #     opt.scheduler_settings = {'epochs': 1000, 'eta_min': 1e-5, 'last_epoch': -1}
 
     opt.nEpochs = opt.scheduler_settings['epochs']
 
