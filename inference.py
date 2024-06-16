@@ -2,7 +2,7 @@ import argparse
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from net import Net
-from model.dataset import *
+from dataset import *
 import matplotlib.pyplot as plt
 from metrics import *
 import os
@@ -65,8 +65,8 @@ def test():
             pad_width = (max_block_size[1] - width % max_block_size[1]) % max_block_size[1] # 512 - 1088 % 512 = 448
           
             # 对图像进行填充
-            # img = F.pad(img, (0, 0, pad_width, pad_height), padding_mode='constant', fill=0) #new version F.pad  (left,top,right,bootom)
-            img = F.pad(img, (0, pad_width, 0, pad_height), mode='constant', value=0)  #old version F.pad  (left,top,right,bootom)
+            # img = F.pad(img, (0, 0, pad_width, pad_height), mode='constant', constant_values=0)#padding_mode
+            img=F.pad(img, (0, pad_width,0, pad_height),mode='constant',value=0)
             _, _, padded_height, padded_width = img.size()
 
             num_blocks_height = (padded_height + max_block_size[0] - 1) // max_block_size[0]
