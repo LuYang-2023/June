@@ -24,7 +24,24 @@ parser.add_argument("--img_norm_cfg_std", default=None, type=float,
                     help="specific a std value img_norm_cfg, default=None (using img_norm_cfg values of each dataset)")
 
 parser.add_argument("--save_img", default=True, type=bool, help="save image of or not")
-parser.add_argument("--save_img_dir", type=str, default='./results/', help="path of saved image"
+parser.add_argument("--save_img_dir", type=str, default='./results/', help="path of saved image")
+parser.add_argument("--save_log", type=str, default='./log/', help="path of saved .pth")
+parser.add_argument("--threshold", type=float, default=0.5)
+
+global opt
+opt = parser.parse_args()
+## Set img_norm_cfg
+if opt.img_norm_cfg_mean != None and opt.img_norm_cfg_std != None:
+  opt.img_norm_cfg = dict()
+  opt.img_norm_cfg['mean'] = opt.img_norm_cfg_mean
+  opt.img_norm_cfg['std'] = opt.img_norm_cfg_std
+  
+def test(): 
+    test_set = InferenceSetLoader(opt.dataset_dir, opt.train_dataset_name, opt.test_dataset_name, opt.img_norm_cfg)
+    test_loader = DataLoader(dataset=test_set, num_workers=1, batch_size=1, shuffle=False)
+    
+    net = Net(model_name=opt.model_name, mode='test').cuda()
+    try:
         net.load_state_dict(torch.load(opt.pth_dir)['state_dict'])
     except:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -32,7 +49,58 @@ parser.add_argument("--save_img_dir", type=str, default='./results/', help="path
     net.eval()
 
     # with torch.no_grad():
-    #     for idx_iter, (img, size, img_dir) in
+    #     for idx_iter, (img, size, img_dir) in tqdm(enumerate(test_loader)):
+    #         img = Variable(img).cuda()
+    #         pred = net.forward(img)
+    #         pred = pred[:,:,:size[0],:size[1]]
+
+    max_block_size = (512, 512)
+    with torch.no_grad():
+        for idx_iter, (img, size, img_dir) in tqdm(enumerate(test_loader)):
+            img = Variable(img).cuda()
+            _, _, height, width = img.size()
+
+            # 计算需要填充的尺寸
+            pad_height = (max_block_size[0] - height % max_block_size[0]) % max_block_size[0] # 512 - 832 % 512 = 192
+            pad_width = (max_block_size[1] - width % max_block_size[1]) % max_block_size[1] # 512 - 1088 % 512 = 448
+          
+            # 对图像进行填充
+            # img = F.pad(img, (0, 0, pad_width, pad_height), mode='constant', constant_values=0)#padding_mode
+            img=F.pad(img, (0, pad_width,0, pad_height),mode='constant',value=0)
+            _, _, padded_height, padded_width = img.size()
+
+            num_blocks_height = (padded_height + max_block_size[0] - 1) // max_block_size[0]
+            num_blocks_width = (padded_width + max_block_size[1] - 1) // max_block_size[1]
+
+            # 动态分块推理
+            output = torch.zeros_like(img)
+            for i in range(num_blocks_height):
+                for j in range(num_blocks_width):
+                    block_y = i * max_block_size[0]
+                    block_x = j * max_block_size[1]
+                    block_height = min(max_block_size[0], padded_height - block_y)
+                    block_width = min(max_block_size[1], padded_width - block_x)
+
+                    # 确保块的尺寸大于0
+                    if block_height <= 0 or block_width <= 0:
+                        print(f'Skipping block at (i={i}, j={j}) due to zero or negative size: height={block_height}, width={block_width}')
+                        continue
+
+                    block = img[:, :, block_y:block_y + block_height, block_x:block_x + block_width]
+                    
+
+                    try:
+                        pred_block = net.forward(block)
+                    except RuntimeError as e:
+                        print(f'Error processing block at (i={i}, j={j}): {str(e)}')
+                        continue
+
+                    output[:, :, block_y:block_y + block_height, block_x:block_x + block_width] = pred_block
+
+            # 去除填充部分
+            output = output[:,:,:size[0],:size[1]]
+            pred = output     
+            ### save img
             if opt.save_img == True:
                 img_save = transforms.ToPILImage()(((pred[0,0,:,:]>opt.threshold).float()).cpu())
                 if not os.path.exists(opt.save_img_dir + opt.test_dataset_name + '/' + opt.model_name):
