@@ -93,12 +93,6 @@ def train():
                 ckpt = torch.load(resume_pth)
                 net.load_state_dict(ckpt['state_dict'])
 
-    # ### Default settings of SCTransNet
-    # if opt.optimizer_name == 'Adam':
-    #     opt.optimizer_settings = {'lr': 5e-4}
-    #     opt.scheduler_name = 'CosineAnnealingLR'
-    #     opt.scheduler_settings = {'epochs': 1000, 'eta_min': 1e-5, 'last_epoch': -1}
-
     opt.nEpochs = opt.scheduler_settings['epochs']
 
     ### Default settings of DNANet
@@ -142,7 +136,7 @@ def train():
                 'state_dict': net.state_dict(),
                 'total_loss': total_loss_list,
             }, save_pth)
-            # test(save_pth)
+            test(save_pth)
 
         if (idx_epoch + 1) == opt.nEpochs and (idx_epoch + 1) % 20 != 0:
             save_pth = opt.save + '/' + opt.dataset_name + '/' + opt.model_name + '_' + str(idx_epoch + 1) + '.pth.tar'
@@ -151,34 +145,34 @@ def train():
                 'state_dict': net.state_dict(),
                 'total_loss': total_loss_list,
             }, save_pth)
-            # test(save_pth)
+            test(save_pth)
 
 
-# def test(save_pth):
-#     test_set = TestSetLoader(opt.dataset_dir, opt.dataset_name, opt.dataset_name, img_norm_cfg=opt.img_norm_cfg)
-#     test_loader = DataLoader(dataset=test_set, num_workers=1, batch_size=1, shuffle=False)
-#
-#     net = Net(model_name=opt.model_name, mode='test').cuda()
-#     ckpt = torch.load(save_pth)
-#     net.load_state_dict(ckpt['state_dict'])
-#     net.eval()
-#
-#     eval_mIoU = mIoU()
-#     eval_PD_FA = PD_FA()
-#     for idx_iter, (img, gt_mask, size, _) in enumerate(test_loader):
-#         img = Variable(img).cuda()
-#         pred = net.forward(img)
-#         pred = pred[:, :, :size[0], :size[1]]
-#         gt_mask = gt_mask[:, :, :size[0], :size[1]]
-#         eval_mIoU.update((pred > opt.threshold).cpu(), gt_mask)
-#         eval_PD_FA.update((pred[0, 0, :, :] > opt.threshold).cpu(), gt_mask[0, 0, :, :], size)
-#
-#     results1 = eval_mIoU.get()
-#     results2 = eval_PD_FA.get()
-#     print("pixAcc, mIoU:\t" + str(results1))
-#     print("PD, FA:\t" + str(results2))
-#     opt.f.write("pixAcc, mIoU:\t" + str(results1) + '\n')
-#     opt.f.write("PD, FA:\t" + str(results2) + '\n')
+def test(save_pth):
+    test_set = TestSetLoader(opt.dataset_dir, opt.dataset_name, opt.dataset_name, img_norm_cfg=opt.img_norm_cfg)
+    test_loader = DataLoader(dataset=test_set, num_workers=1, batch_size=1, shuffle=False)
+
+    net = Net(model_name=opt.model_name, mode='test').cuda()
+    ckpt = torch.load(save_pth)
+    net.load_state_dict(ckpt['state_dict'])
+    net.eval()
+
+    eval_mIoU = mIoU()
+    eval_PD_FA = PD_FA()
+    for idx_iter, (img, gt_mask, size, _) in enumerate(test_loader):
+        img = Variable(img).cuda()
+        pred = net.forward(img)
+        pred = pred[:, :, :size[0], :size[1]]
+        gt_mask = gt_mask[:, :, :size[0], :size[1]]
+        eval_mIoU.update((pred > opt.threshold).cpu(), gt_mask)
+        eval_PD_FA.update((pred[0, 0, :, :] > opt.threshold).cpu(), gt_mask[0, 0, :, :], size)
+
+    results1 = eval_mIoU.get()
+    results2 = eval_PD_FA.get()
+    print("pixAcc, mIoU:\t" + str(results1))
+    print("PD, FA:\t" + str(results2))
+    opt.f.write("pixAcc, mIoU:\t" + str(results1) + '\n')
+    opt.f.write("PD, FA:\t" + str(results2) + '\n')
 
 
 def save_checkpoint(state, save_path):
