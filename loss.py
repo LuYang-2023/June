@@ -43,7 +43,6 @@ class ISNetLoss(nn.Module):
         
         return loss_img + loss_edge
 
-###wo:为MSHNet
 class AverageMeter(object):
     """Computes and stores the average and current value"""
 
