@@ -49,7 +49,7 @@ def test():
     net.eval()
 
 
-    max_block_size = (512, 512)
+    max_block_size = (1536, 1536)
     with torch.no_grad():
         for idx_iter, (img, size, img_dir) in tqdm(enumerate(test_loader)):
             img = Variable(img).cuda()
