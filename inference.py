@@ -55,8 +55,8 @@ def test():
             img = Variable(img).cuda()
             _, _, height, width = img.size()
 
-            pad_height = (max_block_size[0] - height % max_block_size[0]) % max_block_size[0] # 512 - 832 % 512 = 192
-            pad_width = (max_block_size[1] - width % max_block_size[1]) % max_block_size[1] # 512 - 1088 % 512 = 448
+            pad_height = (max_block_size[0] - height % max_block_size[0]) % max_block_size[0]
+            pad_width = (max_block_size[1] - width % max_block_size[1]) % max_block_size[1]
           
 
             img=F.pad(img, (0, pad_width,0, pad_height),mode='constant',value=0)
